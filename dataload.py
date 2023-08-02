@@ -112,6 +112,10 @@ def main(argv):
                     # Clear the artworkdata after committed to DB
                     artworkdata = []
                 else:
+                    # OML4PY module doesn't have native methods to persist additional data to the database; seems to encourage
+                    # using only OML datastores to append new data to an existing table. I want to be able to browse the table
+                    # with SQL clients natively for now; likely this will be replaced by oml datastore operations in a future
+                    # iteration.
                     rows = list(map(lambda x: tuple(x),df.values))
                     cr = oml.cursor()
                     cr.executemany("INSERT INTO CHIARTDATA VALUES (:1,:2,:3,:4)",rows)
