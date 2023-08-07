@@ -56,14 +56,18 @@ def main(argv):
      'NASA announces major Mars rover finding',
      'Drug access, Asia threat in focus at AIDS summit',
      'NASA Mars Odyssey THEMIS image: typical crater',
-     'Road blocks for Aids'],
+     'Road blocks for Aids walter goulet optimus prime'],
      'YEAR':['2017', '2018', '2017', '2017', '2018', '2018', '2018'],
-     'ID':[1,2,3,4,5,6,7]})).split(ratio=(0.7,0.3), seed = 1234)
-    train_dat = dat[0]
-    test_dat = dat[1]
+     'ID':[1,2,3,4,5,6,7]}))
+    data = dat.split(ratio=(0.7,0.3), seed = 1234)
+    train_dat = data[0]
+    test_dat = data[1]
     # Specify settings.
     cur = cursor()
-    cur.execute("Begin ctx_ddl.drop_policy('DMDEMO_ESA_POLICY'); End;")
+    try:
+        cur.execute("Begin ctx_ddl.drop_policy('DMDEMO_ESA_POLICY'); End;")
+    except:
+        pass
     cur.execute("Begin ctx_ddl.create_policy('DMDEMO_ESA_POLICY'); End;")
     cur.close()
 
@@ -92,14 +96,16 @@ def main(argv):
     supplemental_cols = test_dat[:, ['ID', 'COMMENTS']], 
                                 topN = 2).sort_values(by = ['ID'])
 
-    esa_mod.feature_compare(test_dat, 
+    esa_mod.feature_compare(dat, 
                             compare_cols = 'COMMENTS', 
                             supplemental_cols = ['ID'])
 
-    esa_mod.feature_compare(test_dat,
-                            compare_cols = ['COMMENTS', 'YEAR'],
+    pprint.pprint(dat)
+    analysis = esa_mod.feature_compare(dat,
+                            compare_cols = ['COMMENTS'],
                             supplemental_cols = ['ID'])
-
+    res = analysis.sort_values(by = ['SIMILARITY'],ascending=False)
+    pprint.pprint(res)
     # Change the setting parameter and refit the model.
     new_setting = {'ESAS_VALUE_THRESHOLD': '0.01', 
                 'ODMS_TEXT_MAX_FEATURES': '2', 
