@@ -4,13 +4,11 @@ import pandas as pd
 import sys
 import os
 import pprint
-        #'Mars rover takes Drugs in water from Asia',
 
 def main(argv):
     omlusr = os.environ.get("OMLUSERNAME")
     omlpass = os.environ.get("OMLPASS")
     oml.connect(user=omlusr,password=omlpass,dsn="aidb_medium",automl="aidb_medium_pool")
-    # Create training data and test data.
     # Create training data and test data.
     dat = oml.push(pd.DataFrame( 
     {'COMMENTS':['Aids in Africa: Planning for a long war',
@@ -21,9 +19,9 @@ def main(argv):
      'NASA Mars Odyssey THEMIS image: typical crater',
      'Road blocks for Aids'],
      'YEAR':['2017', '2018', '2017', '2017', '2018', '2018', '2018'],
-     'ID':[1,2,3,4,5,6,7]})).split(ratio=(0.7,0.3), seed = 1234)
-    train_dat = dat[0]
-    test_dat = dat[1]
+     'ID':[1,2,3,4,5,6,7]}))
+
+    datadf = dat.pull()
 
     # Specify settings.
     cur = cursor()
@@ -46,46 +44,31 @@ def main(argv):
     # Create an oml ESA model object.
     esa_mod = oml.esa(**odm_settings)
 
-    # Fit the ESA model according to the training data and parameter settings.
-    esa_mod = esa_mod.fit(train_dat, case_id = 'ID', 
+    # Fit the ESA model according to the data and parameter settings.
+    esa_mod = esa_mod.fit(dat, case_id = 'ID', 
                         ctx_settings = ctx_settings)
 
     # Show model details.
     esa_mod
 
-    # Use the model to make predictions on test data.
-    esa_mod.predict(test_dat, 
-                    supplemental_cols = test_dat[:, ['ID', 'COMMENTS']])
-
-    esa_mod.transform(test_dat, 
-    supplemental_cols = test_dat[:, ['ID', 'COMMENTS']], 
+    esa_mod.transform(dat, 
+    supplemental_cols = dat[:, ['ID', 'COMMENTS']], 
                                 topN = 2).sort_values(by = ['ID'])
 
-    results = esa_mod.feature_compare(test_dat, 
+    results = esa_mod.feature_compare(dat, 
                             compare_cols = 'COMMENTS', 
                             supplemental_cols = ['ID'])
-    print(test_dat)
+    datadf = dat.pull()
+    print(datadf)
     print(results)
     resultdf = results.sort_values(by = ['SIMILARITY'],ascending=False).head(1).pull()
     sim = resultdf.loc[0]['SIMILARITY']
     idA = resultdf.loc[0]['ID_A']
     idB = resultdf.loc[0]['ID_B']
-    datadf = test_dat.pull()
     print(f"With highest correlation {sim} entries with index {idA} and {idB} are most similar.")
     print(f"Record A: {datadf.loc[datadf.ID == idA,'COMMENTS'].values[0]}")
     print(f"Record B: {datadf.loc[datadf.ID == idB,'COMMENTS'].values[0]}")
 
-    esa_mod.feature_compare(test_dat,
-                            compare_cols = ['COMMENTS', 'YEAR'],
-                            supplemental_cols = ['ID'])
-
-    # Change the setting parameter and refit the model.
-    new_setting = {'ESAS_VALUE_THRESHOLD': '0.01', 
-                'ODMS_TEXT_MAX_FEATURES': '2', 
-                'ESAS_TOPN_FEATURES': '2'}
-    
-    esa_mod.set_params(**new_setting).fit(train_dat, 'ID', case_id = 'ID', 
-                    ctx_settings = ctx_settings)
 
 if __name__ == "__main__":
     main(sys.argv)
