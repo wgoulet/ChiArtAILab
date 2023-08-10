@@ -19,42 +19,12 @@ def main(argv):
     omlpass = os.environ.get("OMLPASS")
     oml.connect(user=omlusr,password=omlpass,dsn="aidb_medium",automl="aidb_medium_pool")
     chiartdata = oml.sync(table='CHIARTDATA').head(20)
+    # The column names in the data have to be in uppercase apparently; otherwise the esa model
+    # won't load correctly!
+    chiartdata = chiartdata.rename({'description':'DESCRIPTION','artist_name':'ARTIST_NAME','chiartinstid':'CHIARTINSTID'}) 
     print(chiartdata)
-    type(chiartdata)
-    datadf = chiartdata.head(10).pull()
-    print(datadf.columns)
-    print(datadf)
-    print(datadf.description)
-    hprecords = datadf.loc[datadf.artist_name == 'Hiram Powers']
-    print(hprecords)
+    datadf = chiartdata.pull()
 
-    
-    # Pulling data directly in caused errors in model setup, so manually create dataframe with data to debug
-    for i in datadf.chiartinstid:
-        #print(f"{datadf.loc[datadf.chiartinstid == i,'artist_name'].values[0]} " \
-        #    f"{datadf.loc[datadf.chiartinstid == i,'description'].values[0]} "
-        #    f"{datadf.loc[datadf.chiartinstid == i,'chiartinstid'].values[0]} ")
-        print(f"{datadf.loc[datadf.chiartinstid == i,'chiartinstid'].values[0]}",end=",")
-
-    chiartdata2 = oml.push(pd.DataFrame( 
-    {'DESCRIPTION':[
-        'No description available',
-        'A work made of marble.',
-        'A work made of carrera marble.',
-        'A work made of marble.',
-        'A work made of carrera marble.',
-        'A work made of marble.',
-        'A work made of oil on canvas, mounted on panel.',
-        'A work made of oil on canvas.',
-        'A work made of color screenprint on paper.',
-        'Painting of figures construction project amid smoky destruction, middle is pink crater.'
-     ],
-     'ARTIST_NAME':['Pu Hua','Hiram Powers','Hiram Powers','Hiram Powers','Hiram Powers',
-                    'Joseph Mozier','Ilya Bolotowsky','Ilya Bolotowsky','Ilya Bolotowsky','Peter Blume'],
-     'CHIARTINSTID':[46352,64076,120518,107863,120515,146929,186682,93779,94097,56682]}))
-    
-    
-    datadf = chiartdata.head(10).pull()
     # Specify settings.
     cur = cursor()
     try:
@@ -77,6 +47,7 @@ def main(argv):
     esa_mod = oml.esa(**odm_settings)
 
     # Fit the ESA model according to the data and parameter settings.
+    # Bizarre behavior here; the model fails to load if the column names in the data are lowercased
     esa_mod = esa_mod.fit(chiartdata, case_id = 'CHIARTINSTID', 
                         ctx_settings = ctx_settings)
 
@@ -84,21 +55,20 @@ def main(argv):
     esa_mod
 
     esa_mod.transform(chiartdata, 
-    supplemental_cols = chiartdata[:, ['chiartinstid', 'description']], 
-                                topN = 2).sort_values(by = ['chiartinstid'])
+    supplemental_cols = chiartdata[:, ['CHIARTINSTID', 'DESCRIPTION']], 
+                                topN = 2).sort_values(by = ['CHIARTINSTID'])
 
     results = esa_mod.feature_compare(chiartdata, 
-                            compare_cols = 'description', 
-                            supplemental_cols = ['chiartinstid'])
-    print(datadf)
+                            compare_cols = 'DESCRIPTION', 
+                            supplemental_cols = ['CHIARTINSTID'])
     print(results)
     resultdf = results.sort_values(by = ['SIMILARITY'],ascending=False).head(1).pull()
     sim = resultdf.loc[0]['SIMILARITY']
-    idA = resultdf.loc[0]['ID_A']
-    idB = resultdf.loc[0]['ID_B']
+    idA = resultdf.loc[0]['CHIARTINSTID_A']
+    idB = resultdf.loc[0]['CHIARTINSTID_B']
     print(f"With highest correlation {sim} entries with index {idA} and {idB} are most similar.")
-    print(f"Record A: {datadf.loc[datadf.chiartinstid == idA,'description'].values[0]}")
-    print(f"Record B: {datadf.loc[datadf.chiartinstid == idB,'description'].values[0]}")
+    print(f"Record A: {datadf.loc[datadf.CHIARTINSTID == idA,'DESCRIPTION'].values[0]}")
+    print(f"Record B: {datadf.loc[datadf.CHIARTINSTID == idB,'DESCRIPTION'].values[0]}")
 
 
 if __name__ == "__main__":
