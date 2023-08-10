@@ -11,36 +11,37 @@ def main(argv):
     omlpass = os.environ.get("OMLPASS")
     oml.connect(user=omlusr,password=omlpass,dsn="aidb_medium",automl="aidb_medium_pool")
     # Create training data and test data.
+    # Create training data and test data.
     dat = oml.push(pd.DataFrame( 
     {'COMMENTS':['Aids in Africa: Planning for a long war',
-        'Mars rover maneuvers for rim shot',
-        'Mars express confirms presence of water at Mars south pole',
-        'NASA announces major Mars rover finding',
-        'Drug access, Asia threat in focus at AIDS summit',
-        'NASA Mars Odyssey THEMIS image: typical crater',
-        'Road blocks for Aids',
-        'Drugs and Aids major threats to America'],
-        'YEAR':['2017', '2018', '2017', '2017','2020', '2018', '2018', '2018'],
-        'ID':[1,2,3,4,5,6,7,8]}))
-    datadf = dat.pull()
-    data = dat.split(ratio=(0.65,0.35), seed = 1234)
-    train_dat = data[0]
-    test_dat = data[1]
+     'Mars rover maneuvers for rim shot',
+     'Mars express confirms presence of water at Mars south pole',
+     'NASA announces major Mars rover finding',
+     'Drug access, Asia threat in focus at AIDS summit',
+     'NASA Mars Odyssey THEMIS image: typical crater',
+     'Road blocks for Aids'],
+     'YEAR':['2017', '2018', '2017', '2017', '2018', '2018', '2018'],
+     'ID':[1,2,3,4,5,6,7]})).split(ratio=(0.7,0.3), seed = 1234)
+    train_dat = dat[0]
+    test_dat = dat[1]
+
     # Specify settings.
     cur = cursor()
     try:
-        cur.execute("Begin ctx_ddl.drop_policy('DEMO_ESA_POLICY'); End;")
+        # Cleanup old policy and model from DB if it exists
+        cur.execute("Begin ctx_ddl.drop_policy('DEMO_ESA_POLICYV1'); End;")
+        oml.drop(model='ID')
     except:
         pass
-    cur.execute("Begin ctx_ddl.create_policy('DEMO_ESA_POLICY'); End;")
+    cur.execute("Begin ctx_ddl.create_policy('DEMO_ESA_POLICYV1'); End;")
     cur.close()
 
-    odm_settings = {'odms_text_policy_name': 'DEMO_ESA_POLICY',
+    odm_settings = {'odms_text_policy_name': 'DEMO_ESA_POLICYV1',
                     '"ODMS_TEXT_MIN_DOCUMENTS"': 1,
                     '"ESAS_MIN_ITEMS"': 1}
 
     ctx_settings = {'COMMENTS': 
-                    'TEXT(POLICY_NAME:DEMO_ESA_POLICY)(TOKEN_TYPE:STEM)'}
+                    'TEXT(POLICY_NAME:DEMO_ESA_POLICYV1)(TOKEN_TYPE:STEM)'}
 
     # Create an oml ESA model object.
     esa_mod = oml.esa(**odm_settings)
@@ -49,41 +50,42 @@ def main(argv):
     esa_mod = esa_mod.fit(train_dat, case_id = 'ID', 
                         ctx_settings = ctx_settings)
 
+    # Show model details.
+    esa_mod
 
     # Use the model to make predictions on test data.
-    pred = esa_mod.predict(test_dat, 
+    esa_mod.predict(test_dat, 
                     supplemental_cols = test_dat[:, ['ID', 'COMMENTS']])
-    df = pred.pull()
-    print("Predicting which feature the test data is most likely to align to")
-    pprint.pprint(pred)
-    print("Done Predicting")
 
     esa_mod.transform(test_dat, 
     supplemental_cols = test_dat[:, ['ID', 'COMMENTS']], 
                                 topN = 2).sort_values(by = ['ID'])
 
-    analysis = esa_mod.feature_compare(test_dat, 
+    results = esa_mod.feature_compare(test_dat, 
                             compare_cols = 'COMMENTS', 
                             supplemental_cols = ['ID'])
-    res = analysis.sort_values(by = ['SIMILARITY'],ascending=False)
-    # Get most similar entries and print out the score and the matching lines
-    resdf = res.head(1).pull()
-    sim = resdf.loc[0]['SIMILARITY']
-    idA = resdf.loc[0]['ID_A']
-    idB = resdf.loc[0]['ID_B']
+    print(test_dat)
+    print(results)
+    resultdf = results.sort_values(by = ['SIMILARITY'],ascending=False).head(1).pull()
+    sim = resultdf.loc[0]['SIMILARITY']
+    idA = resultdf.loc[0]['ID_A']
+    idB = resultdf.loc[0]['ID_B']
+    datadf = test_dat.pull()
     print(f"With highest correlation {sim} entries with index {idA} and {idB} are most similar.")
-    print(f"Record A: {datadf.loc[idA]['COMMENTS']}")
-    print(f"Record B: {datadf.loc[idB]['COMMENTS']}")
-
-    pprint.pprint(res)
+    print(f"Record A: {datadf.loc[datadf.ID == idA,'COMMENTS'].values[0]}")
+    print(f"Record B: {datadf.loc[datadf.ID == idB,'COMMENTS'].values[0]}")
 
     esa_mod.feature_compare(test_dat,
                             compare_cols = ['COMMENTS', 'YEAR'],
                             supplemental_cols = ['ID'])
 
-    cur = cursor()
-    cur.execute("Begin ctx_ddl.drop_policy('DEMO_ESA_POLICY'); End;")
-    cur.close()
+    # Change the setting parameter and refit the model.
+    new_setting = {'ESAS_VALUE_THRESHOLD': '0.01', 
+                'ODMS_TEXT_MAX_FEATURES': '2', 
+                'ESAS_TOPN_FEATURES': '2'}
+    
+    esa_mod.set_params(**new_setting).fit(train_dat, 'ID', case_id = 'ID', 
+                    ctx_settings = ctx_settings)
 
 if __name__ == "__main__":
     main(sys.argv)
