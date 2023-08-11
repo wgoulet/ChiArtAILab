@@ -5,6 +5,7 @@ import urllib
 import time
 import math
 import pandas as pd
+import numpy as np
 import oml
 import os
 import pickle
@@ -18,7 +19,7 @@ def main(argv):
     omlusr = os.environ.get("OMLUSERNAME")
     omlpass = os.environ.get("OMLPASS")
     oml.connect(user=omlusr,password=omlpass,dsn="aidb_medium",automl="aidb_medium_pool")
-    chiartdata = oml.sync(table='CHIARTDATA').head(500)
+    chiartdata = oml.sync(table='CHIARTDATA').tail(50)
     # The column names in the data have to be in uppercase apparently; otherwise the esa model
     # won't load correctly!
     chiartdata = chiartdata.rename({'description':'DESCRIPTION','artist_name':'ARTIST_NAME','chiartinstid':'CHIARTINSTID',
@@ -64,20 +65,29 @@ def main(argv):
     results = esa_mod.feature_compare(chiartdata, 
                             compare_cols = 'DESCRIPTION', 
                             supplemental_cols = ['CHIARTINSTID'])
-    print(results)
+    dataset = []
     resultdf = results.sort_values(by = ['SIMILARITY'],ascending=False).head(100).pull()
     for i in resultdf.index:
         sim = resultdf.loc[i]['SIMILARITY']
         idA = resultdf.loc[i]['CHIARTINSTID_A']
         idB = resultdf.loc[i]['CHIARTINSTID_B']
-        print(f"High correlation {sim} entries with index {idA} and {idB} are similar.")
-        print(f"Record A: {datadf.loc[datadf.CHIARTINSTID == idA,'DESCRIPTION'].values[0]}")
-        print(f"Record A: {datadf.loc[datadf.CHIARTINSTID == idA,'ARTIST_NAME'].values[0]}")
-        print(f"Record A: {datadf.loc[datadf.CHIARTINSTID == idA,'TITLE'].values[0]}")
-        print(f"Record B: {datadf.loc[datadf.CHIARTINSTID == idB,'DESCRIPTION'].values[0]}")
-        print(f"Record B: {datadf.loc[datadf.CHIARTINSTID == idB,'ARTIST_NAME'].values[0]}")
-        print(f"Record B: {datadf.loc[datadf.CHIARTINSTID == idB,'TITLE'].values[0]}")
+        df = pd.DataFrame({
+            'artist_name_a':[datadf.loc[datadf.CHIARTINSTID == idA,'ARTIST_NAME'].values[0]], 
+            'title_a':[datadf.loc[datadf.CHIARTINSTID == idA,'TITLE'].values[0]],
+            'description_a':[datadf.loc[datadf.CHIARTINSTID == idA,'DESCRIPTION'].values[0]],
+            'artist_name_b':[datadf.loc[datadf.CHIARTINSTID == idB,'ARTIST_NAME'].values[0]],
+            'title_b':[datadf.loc[datadf.CHIARTINSTID == idB,'TITLE'].values[0]],
+            'description_b':[datadf.loc[datadf.CHIARTINSTID == idB,'DESCRIPTION'].values[0]],
+            'similarity':sim})
+        dataset.append(df)
 
+    dbset = pd.concat(dataset)
+    oml_chiartsimdata = oml.create(dbset,table ="CHIARTSIMDATA",dbtypes={'artist_name_a':'VARCHAR2(4000)','title_a':'VARCHAR2(4000)',
+                                        'description_a':'VARCHAR2(4000)','artist_name_b':'VARCHAR2(4000)',
+                                        'title_b':'VARCHAR2(4000)','description_b':'VARCHAR2(4000)','similarity':'FLOAT(5)'})
+
+def combiner(datadf,y):
+    return
 
 if __name__ == "__main__":
     main(sys.argv)
