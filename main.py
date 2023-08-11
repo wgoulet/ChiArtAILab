@@ -19,7 +19,7 @@ def main(argv):
     omlusr = os.environ.get("OMLUSERNAME")
     omlpass = os.environ.get("OMLPASS")
     oml.connect(user=omlusr,password=omlpass,dsn="aidb_medium",automl="aidb_medium_pool")
-    chiartdata = oml.sync(table='CHIARTDATA').tail(50)
+    chiartdata = oml.sync(table='CHIARTDATA').tail(500)
     # The column names in the data have to be in uppercase apparently; otherwise the esa model
     # won't load correctly!
     chiartdata = chiartdata.rename({'description':'DESCRIPTION','artist_name':'ARTIST_NAME','chiartinstid':'CHIARTINSTID',
@@ -66,7 +66,7 @@ def main(argv):
                             compare_cols = 'DESCRIPTION', 
                             supplemental_cols = ['CHIARTINSTID'])
     dataset = []
-    resultdf = results.sort_values(by = ['SIMILARITY'],ascending=False).head(100).pull()
+    resultdf = results.sort_values(by = ['SIMILARITY'],ascending=False).head(500).pull()
     for i in resultdf.index:
         sim = resultdf.loc[i]['SIMILARITY']
         idA = resultdf.loc[i]['CHIARTINSTID_A']
@@ -85,9 +85,6 @@ def main(argv):
     oml_chiartsimdata = oml.create(dbset,table ="CHIARTSIMDATA",dbtypes={'artist_name_a':'VARCHAR2(4000)','title_a':'VARCHAR2(4000)',
                                         'description_a':'VARCHAR2(4000)','artist_name_b':'VARCHAR2(4000)',
                                         'title_b':'VARCHAR2(4000)','description_b':'VARCHAR2(4000)','similarity':'FLOAT(5)'})
-
-def combiner(datadf,y):
-    return
 
 if __name__ == "__main__":
     main(sys.argv)
