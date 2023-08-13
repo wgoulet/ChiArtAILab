@@ -14,6 +14,7 @@ import logging
 import logging.handlers
 from oml import cursor
 import cx_Oracle
+from oml.mlx import GlobalFeatureImportance
 
 def main(argv):
     omlusr = os.environ.get("OMLUSERNAME")
@@ -58,6 +59,23 @@ def main(argv):
     # Show model details.
     esa_mod
 
+    # Get extracted features
+    features = esa_mod.features
+    features
+    
+    try:
+        cur = cursor()
+        cur.execute("DROP TABLE OMLUSER.CHIARTFEATURES")
+        cur.close()
+    except:
+        pass
+    # Strip out the artist name/title attributes from the features list
+    fdata = features.pull()
+    noan = fdata.loc[fdata['ATTRIBUTE_NAME'] != 'ARTIST_NAME']
+    stripped = noan.loc[fdata['ATTRIBUTE_NAME'] != 'TITLE']
+    oml_chiartfeatures = oml.create(stripped,table ="CHIARTFEATURES",dbtypes={'ATTRIBUTE_NAME':'VARCHAR2(4000)','ATTRIBUTE_VALUE':'VARCHAR2(4000)',
+                                        'FEAUTURE_ID':'NUMBER','COEFFICIENT':'FLOAT(5)'})
+    
     esa_mod.transform(chiartdata, 
     supplemental_cols = chiartdata[:, ['CHIARTINSTID', 'DESCRIPTION']], 
                                 topN = 2).sort_values(by = ['CHIARTINSTID'])
@@ -82,6 +100,12 @@ def main(argv):
         dataset.append(df)
 
     dbset = pd.concat(dataset)
+    try:
+        cur = cursor()
+        cur.execute("DROP TABLE OMLUSER.CHIARTSIMDATA")
+        cur.close()
+    except:
+        pass
     oml_chiartsimdata = oml.create(dbset,table ="CHIARTSIMDATA",dbtypes={'artist_name_a':'VARCHAR2(4000)','title_a':'VARCHAR2(4000)',
                                         'description_a':'VARCHAR2(4000)','artist_name_b':'VARCHAR2(4000)',
                                         'title_b':'VARCHAR2(4000)','description_b':'VARCHAR2(4000)','similarity':'FLOAT(5)'})
