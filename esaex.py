@@ -19,9 +19,15 @@ def main(argv):
      'NASA Mars Odyssey THEMIS image: typical crater',
      'Road blocks for Aids'],
      'YEAR':['2017', '2018', '2017', '2017', '2018', '2018', '2018'],
-     'ID':[1,2,3,4,5,6,7]}))
+     'ID':[1,2,3,4,5,6,7]})).split(ratio=(0.7,0.3),seed = 1234)
 
-    datadf = dat.pull()
+    train_dat = dat[0]
+    test_dat = dat[1]
+    all_dat = dat[0].append(dat[1])
+    outfile = 'log.txt'
+    with open(outfile,"+a") as f:
+        f.write(pprint.pformat(all_dat))
+        
 
     # Specify settings.
     cur = cursor()
@@ -45,30 +51,61 @@ def main(argv):
     esa_mod = oml.esa(**odm_settings)
 
     # Fit the ESA model according to the data and parameter settings.
-    esa_mod = esa_mod.fit(dat, case_id = 'ID', 
+    esa_mod = esa_mod.fit(train_dat, case_id = 'ID', 
                         ctx_settings = ctx_settings)
 
     # Show model details.
     esa_mod
+    with open(outfile,"+a") as f:
+        f.write(pprint.pformat(esa_mod))
+        f.write("\n") 
 
-    esa_mod.transform(dat, 
-    supplemental_cols = dat[:, ['ID', 'COMMENTS']], 
+    # Use the model to make predictions on test data.
+    w = esa_mod.predict(test_dat, 
+                    supplemental_cols = test_dat[:, ['ID', 'COMMENTS']])
+    trainfeatures = esa_mod.features.pull()
+    predictions = w.pull()
+    with open(outfile,"+a") as f:
+        f.write(pprint.pformat(predictions))
+        f.write("\n") 
+    predfeature = []
+    for i in predictions.index:
+        fid = predictions.loc[i]['FEATURE_ID']
+        predfeature.append(predictions.loc[i]['COMMENTS'])
+        for v in trainfeatures.loc[trainfeatures.FEATURE_ID == fid,'ATTRIBUTE_NAME'].values:
+            predfeature.append(v)
+    with open(outfile,"+a") as f:
+        f.write(pprint.pformat(predfeature))
+        f.write("\n") 
+    esa_mod.transform(test_dat, 
+    supplemental_cols = test_dat[:, ['ID', 'COMMENTS']], 
                                 topN = 2).sort_values(by = ['ID'])
 
-    results = esa_mod.feature_compare(dat, 
+    x = esa_mod.feature_compare(all_dat, 
                             compare_cols = 'COMMENTS', 
                             supplemental_cols = ['ID'])
-    datadf = dat.pull()
-    print(datadf)
-    print(results)
-    resultdf = results.sort_values(by = ['SIMILARITY'],ascending=False).head(1).pull()
-    sim = resultdf.loc[0]['SIMILARITY']
-    idA = resultdf.loc[0]['ID_A']
-    idB = resultdf.loc[0]['ID_B']
-    print(f"With highest correlation {sim} entries with index {idA} and {idB} are most similar.")
-    print(f"Record A: {datadf.loc[datadf.ID == idA,'COMMENTS'].values[0]}")
-    print(f"Record B: {datadf.loc[datadf.ID == idB,'COMMENTS'].values[0]}")
+    x = x.sort_values(by = ['SIMILARITY'],ascending=False).head(5).pull()
+    with open(outfile,"+a") as f:
+        f.write(pprint.pformat(x))
+        f.write("\n") 
+    y = esa_mod.feature_compare(all_dat,
+                            compare_cols = ['COMMENTS', 'YEAR'],
+                            supplemental_cols = ['ID'])
+    y = y.sort_values(by = ['SIMILARITY'],ascending=False).head(5).pull()
+    with open(outfile,"+a") as f:
+        f.write(pprint.pformat(y))
+        f.write("\n") 
 
+    # Change the setting parameter and refit the model.
+    new_setting = {'ESAS_VALUE_THRESHOLD': '0.01', 
+                'ODMS_TEXT_MAX_FEATURES': '2', 
+                'ESAS_TOPN_FEATURES': '2'}
+    esa_mod.set_params(**new_setting).fit(train_dat, 'ID', case_id = 'ID', 
+                    ctx_settings = ctx_settings)
+
+    cur = cursor()
+    cur.execute("Begin ctx_ddl.drop_policy('DEMO_ESA_POLICYV1'); End;")
+    cur.close()
 
 if __name__ == "__main__":
     main(sys.argv)
